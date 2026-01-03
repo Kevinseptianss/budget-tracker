@@ -1,65 +1,450 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import {
+  Container,
+  Typography,
+  Card,
+  CardContent,
+  Fab,
+  Box,
+  List,
+  ListItem,
+  ListItemText,
+  IconButton,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Alert,
+  Snackbar,
+  CircularProgress,
+  Divider,
+} from "@mui/material";
+import {
+  Add as AddIcon,
+  AccountBalanceWallet as WalletIcon,
+  TrendingUp as TrendingUpIcon,
+  Receipt as ReceiptIcon,
+  Analytics as AnalyticsIcon,
+} from "@mui/icons-material";
+import { format } from "date-fns";
+import { Transaction, CATEGORIES } from "../types/transaction";
+import {
+  getTransactions,
+  addTransaction,
+  updateTransaction,
+  deleteTransaction,
+  getTotalSpent,
+} from "../services/transactionService";
+
+export default function BudgetTracker() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [totalSpent, setTotalSpent] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: "success" | "error";
+  }>({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+
+  // Form state
+  const [formData, setFormData] = useState({
+    amount: "",
+    description: "",
+    category: "",
+    date: format(new Date(), "yyyy-MM-dd"),
+  });
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [transactionsData, total] = await Promise.all([
+        getTransactions(),
+        getTotalSpent(),
+      ]);
+      setTransactions(transactionsData);
+      setTotalSpent(total);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      showSnackbar("Error loading data", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const showSnackbar = (
+    message: string,
+    severity: "success" | "error" = "success"
+  ) => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const resetForm = () => {
+    setFormData({
+      amount: "",
+      description: "",
+      category: "",
+      date: format(new Date(), "yyyy-MM-dd"),
+    });
+    setEditingTransaction(null);
+  };
+
+  const handleOpenDialog = (transaction?: Transaction) => {
+    if (transaction) {
+      setEditingTransaction(transaction);
+      setFormData({
+        amount: transaction.amount.toString(),
+        description: transaction.description,
+        category: transaction.category,
+        date: format(transaction.date, "yyyy-MM-dd"),
+      });
+    } else {
+      resetForm();
+    }
+    setDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    resetForm();
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.amount || !formData.description || !formData.category) {
+      showSnackbar("Please fill in all fields", "error");
+      return;
+    }
+
+    const amount = parseFloat(formData.amount);
+    if (isNaN(amount) || amount <= 0) {
+      showSnackbar("Please enter a valid amount", "error");
+      return;
+    }
+
+    try {
+      const transactionData = {
+        amount,
+        description: formData.description,
+        category: formData.category,
+        date: new Date(formData.date),
+      };
+
+      if (editingTransaction) {
+        await updateTransaction(editingTransaction.id!, transactionData);
+        showSnackbar("Transaction updated successfully");
+      } else {
+        await addTransaction(transactionData);
+        showSnackbar("Transaction added successfully");
+      }
+
+      handleCloseDialog();
+      loadData();
+    } catch (error) {
+      console.error("Error saving transaction:", error);
+      showSnackbar("Error saving transaction", "error");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this transaction?")) {
+      try {
+        await deleteTransaction(id);
+        showSnackbar("Transaction deleted successfully");
+        loadData();
+      } catch (error) {
+        console.error("Error deleting transaction:", error);
+        showSnackbar("Error deleting transaction", "error");
+      }
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  if (loading) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="100vh"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <Container maxWidth="sm" sx={{ pb: 10 }}>
+      {/* Header */}
+      <Box sx={{ py: 3, textAlign: "center" }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            mb: 2,
+          }}
+        >
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{ display: "flex", alignItems: "center", gap: 1 }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            <WalletIcon color="primary" />
+            Budget Tracker
+          </Typography>
+          <Link href="/analytics" passHref>
+            <IconButton color="primary" size="large">
+              <AnalyticsIcon />
+            </IconButton>
+          </Link>
+        </Box>
+        <Typography variant="body1" color="text.secondary">
+          Track your travel expenses
+        </Typography>
+      </Box>
+
+      {/* Total Spent Card */}
+      <Card
+        sx={{
+          mb: 3,
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          color: "white",
+        }}
+      >
+        <CardContent sx={{ textAlign: "center", py: 3 }}>
+          <TrendingUpIcon sx={{ fontSize: 40, mb: 1 }} />
+          <Typography
+            variant="h3"
+            component="div"
+            sx={{ fontWeight: "bold", mb: 1 }}
+          >
+            {formatCurrency(totalSpent)}
+          </Typography>
+          <Typography variant="h6">Total Spent</Typography>
+        </CardContent>
+      </Card>
+
+      {/* Recent Transactions */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography
+            variant="h6"
+            gutterBottom
+            sx={{ display: "flex", alignItems: "center", gap: 1 }}
+          >
+            <ReceiptIcon />
+            Recent Transactions
+          </Typography>
+          <Divider sx={{ mb: 2 }} />
+
+          {transactions.length === 0 ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ textAlign: "center", py: 4 }}
+            >
+              No transactions yet. Add your first expense!
+            </Typography>
+          ) : (
+            <List>
+              {transactions.slice(0, 5).map((transaction) => (
+                <ListItem
+                  key={transaction.id}
+                  sx={{ px: 0, cursor: "pointer" }}
+                  onClick={() => handleOpenDialog(transaction)}
+                >
+                  <ListItemText
+                    primary={
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          width: "100%",
+                        }}
+                      >
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                        >
+                          <Typography
+                            variant="subtitle1"
+                            sx={{ fontWeight: "medium" }}
+                          >
+                            {transaction.description}
+                          </Typography>
+                          <Chip
+                            label={transaction.category}
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                          />
+                        </Box>
+                        <Typography
+                          variant="h6"
+                          color="primary"
+                          sx={{ fontWeight: "bold" }}
+                        >
+                          {formatCurrency(transaction.amount)}
+                        </Typography>
+                      </Box>
+                    }
+                    secondary={format(transaction.date, "MMM dd, yyyy")}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Add Transaction FAB */}
+      <Fab
+        color="primary"
+        aria-label="add"
+        sx={{
+          position: "fixed",
+          bottom: 16,
+          right: 16,
+          zIndex: 1000,
+        }}
+        onClick={() => handleOpenDialog()}
+      >
+        <AddIcon />
+      </Fab>
+
+      {/* Transaction Dialog */}
+      <Dialog
+        open={dialogOpen}
+        onClose={handleCloseDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {editingTransaction ? "Edit Transaction" : "Add Transaction"}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+            <TextField
+              label="Amount"
+              type="number"
+              value={formData.amount}
+              onChange={(e) =>
+                setFormData({ ...formData, amount: e.target.value })
+              }
+              fullWidth
+              required
+              inputProps={{ step: "0.01", min: "0" }}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+            <TextField
+              label="Description"
+              value={formData.description}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
+              fullWidth
+              required
+              multiline
+              rows={2}
+            />
+            <FormControl fullWidth required>
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={formData.category}
+                onChange={(e) =>
+                  setFormData({ ...formData, category: e.target.value })
+                }
+                label="Category"
+              >
+                {CATEGORIES.map((category) => (
+                  <MenuItem key={category} value={category}>
+                    {category}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Date"
+              type="date"
+              value={formData.date}
+              onChange={(e) =>
+                setFormData({ ...formData, date: e.target.value })
+              }
+              fullWidth
+              required
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          {editingTransaction && (
+            <Button
+              onClick={() => {
+                handleDelete(editingTransaction.id!);
+                handleCloseDialog();
+              }}
+              color="error"
+              variant="outlined"
+              sx={{ mr: "auto" }}
+            >
+              Delete
+            </Button>
+          )}
+          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleSubmit} variant="contained">
+            {editingTransaction ? "Update" : "Add"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Container>
   );
 }
