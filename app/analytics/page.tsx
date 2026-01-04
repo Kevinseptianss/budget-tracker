@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
@@ -87,10 +85,10 @@ export default function Analytics() {
   const loadTransactions = async () => {
     try {
       setLoading(true);
-      const data = await getTransactions();
-      setTransactions(data);
+      const transactionsData = await getTransactions();
+      setTransactions(transactionsData);
     } catch (error) {
-      console.error("Error loading transactions:", error);
+      console.error("Error loading data:", error);
     } finally {
       setLoading(false);
     }

@@ -2,7 +2,7 @@ export interface Transaction {
   id?: string;
   amount: number;
   description: string;
-  category: string;
+  category: string; // Will be category ID or name
   date: Date;
   createdAt?: Date;
   updatedAt?: Date;
@@ -13,7 +13,8 @@ export type TransactionFormData = Omit<
   "id" | "createdAt" | "updatedAt"
 >;
 
-export const CATEGORIES = [
+// Legacy categories - keeping for backward compatibility
+export const LEGACY_CATEGORIES = [
   "Food & Dining",
   "Transportation",
   "Accommodation",
@@ -24,4 +25,4 @@ export const CATEGORIES = [
   "Other",
 ] as const;
 
-export type Category = (typeof CATEGORIES)[number];
+export type LegacyCategory = (typeof LEGACY_CATEGORIES)[number];

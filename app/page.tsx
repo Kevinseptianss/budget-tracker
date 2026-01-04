@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -37,9 +35,10 @@ import {
   TrendingUp as TrendingUpIcon,
   Receipt as ReceiptIcon,
   Analytics as AnalyticsIcon,
+  Category as CategoryIcon,
 } from "@mui/icons-material";
 import { format } from "date-fns";
-import { Transaction, CATEGORIES } from "../types/transaction";
+import { Transaction } from "../types/transaction";
 import {
   getTransactions,
   addTransaction,
@@ -47,9 +46,12 @@ import {
   deleteTransaction,
   getTotalSpent,
 } from "../services/transactionService";
+import { getCategories } from "../services/categoryService";
+import { Category } from "../types/category";
 
 export default function BudgetTracker() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [totalSpent, setTotalSpent] = useState(0);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -70,17 +72,27 @@ export default function BudgetTracker() {
     amount: "",
     description: "",
     category: "",
-    date: format(new Date(), "yyyy-MM-dd"),
+    date: "",
   });
+
+  useEffect(() => {
+    // Initialize date when component mounts on client
+    setFormData(prev => ({
+      ...prev,
+      date: format(new Date(), "yyyy-MM-dd")
+    }));
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [transactionsData, total] = await Promise.all([
+      const [transactionsData, categoriesData, total] = await Promise.all([
         getTransactions(),
+        getCategories(),
         getTotalSpent(),
       ]);
       setTransactions(transactionsData);
+      setCategories(categoriesData);
       setTotalSpent(total);
     } catch (error) {
       console.error("Error loading data:", error);
@@ -92,6 +104,11 @@ export default function BudgetTracker() {
 
   useEffect(() => {
     loadData();
+    // Initialize date when component mounts on client
+    setFormData(prev => ({
+      ...prev,
+      date: format(new Date(), "yyyy-MM-dd")
+    }));
   }, [loadData]);
 
   const showSnackbar = (
@@ -229,6 +246,11 @@ export default function BudgetTracker() {
           <Link href="/analytics" passHref>
             <IconButton color="primary" size="large">
               <AnalyticsIcon />
+            </IconButton>
+          </Link>
+          <Link href="/categories" passHref>
+            <IconButton color="primary" size="large">
+              <CategoryIcon />
             </IconButton>
           </Link>
         </Box>
@@ -389,9 +411,20 @@ export default function BudgetTracker() {
                 }
                 label="Category"
               >
-                {CATEGORIES.map((category) => (
-                  <MenuItem key={category} value={category}>
-                    {category}
+                {categories.map((category) => (
+                  <MenuItem key={category.id} value={category.name}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: "50%",
+                          backgroundColor: category.color || "#1976d2",
+                          flexShrink: 0,
+                        }}
+                      />
+                      {category.name}
+                    </Box>
                   </MenuItem>
                 ))}
               </Select>
