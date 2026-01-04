@@ -21,8 +21,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
-  Chip,
   Alert,
   Snackbar,
   CircularProgress,
@@ -32,10 +30,18 @@ import {
 import { SketchPicker } from "react-color";
 import {
   Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
   ArrowBack as ArrowBackIcon,
   Category as CategoryIcon,
+  Restaurant as RestaurantIcon,
+  ShoppingCart as ShoppingCartIcon,
+  LocalGasStation as GasStationIcon,
+  Flight as FlightIcon,
+  Hotel as HotelIcon,
+  LocalTaxi as TaxiIcon,
+  LocalMovies as MoviesIcon,
+  MedicalServices as MedicalIcon,
+  School as SchoolIcon,
+  Build as BuildIcon,
 } from "@mui/icons-material";
 import { Category, CategoryFormData } from "../../types/category";
 import {
@@ -54,6 +60,27 @@ const isLightColor = (color: string): boolean => {
   const b = parseInt(hex.substr(4, 2), 16);
   const brightness = (r * 299 + g * 587 + b * 114) / 1000;
   return brightness > 128;
+};
+
+// Helper function to get icon component by name
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const getIconComponent = (iconName: string): React.ComponentType<any> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const iconMap: { [key: string]: React.ComponentType<any> } = {
+    restaurant: RestaurantIcon,
+    shopping: ShoppingCartIcon,
+    gas: GasStationIcon,
+    flight: FlightIcon,
+    hotel: HotelIcon,
+    taxi: TaxiIcon,
+    movies: MoviesIcon,
+    medical: MedicalIcon,
+    school: SchoolIcon,
+    build: BuildIcon,
+    category: CategoryIcon,
+  };
+
+  return iconMap[iconName] || CategoryIcon;
 };
 
 export default function Categories() {
@@ -255,58 +282,50 @@ export default function Categories() {
             </Typography>
           ) : (
             <List>
-              {categories.map((category) => (
-                <ListItem key={category.id} sx={{ px: 0 }}>
-                  <ListItemText
-                    primary={
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 2,
-                        }}
-                      >
+              {categories.map((category) => {
+                const IconComponent = getIconComponent(category.icon || "category");
+                return (
+                  <ListItem
+                    key={category.id}
+                    sx={{
+                      px: 0,
+                      cursor: "pointer",
+                      "&:hover": {
+                        backgroundColor: "action.hover",
+                      },
+                    }}
+                    onClick={() => handleOpenDialog(category)}
+                  >
+                    <ListItemText
+                      primary={
                         <Box
                           sx={{
-                            width: 16,
-                            height: 16,
-                            borderRadius: "50%",
-                            backgroundColor: category.color || "#1976d2",
-                            flexShrink: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 2,
                           }}
-                        />
-                        <Typography variant="subtitle1" sx={{ fontWeight: "medium" }}>
-                          {category.name}
-                        </Typography>
-                        <Chip
-                          label={category.icon || "category"}
-                          size="small"
-                          variant="outlined"
-                          sx={{ ml: "auto" }}
-                        />
-                      </Box>
-                    }
-                  />
-                  <ListItemSecondaryAction>
-                    <IconButton
-                      edge="end"
-                      aria-label="edit"
-                      onClick={() => handleOpenDialog(category)}
-                      sx={{ mr: 1 }}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      edge="end"
-                      aria-label="delete"
-                      onClick={() => handleDelete(category.id, category.name)}
-                      color="error"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              ))}
+                        >
+                          <Box
+                            sx={{
+                              width: 16,
+                              height: 16,
+                              borderRadius: "50%",
+                              backgroundColor: category.color || "#1976d2",
+                              flexShrink: 0,
+                            }}
+                          />
+                          <Typography variant="subtitle1" sx={{ fontWeight: "medium" }}>
+                            {category.name}
+                          </Typography>
+                          <Box sx={{ ml: "auto", display: "flex", alignItems: "center" }}>
+                            <IconComponent sx={{ fontSize: 20, color: "text.secondary" }} />
+                          </Box>
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                );
+              })}
             </List>
           )}
         </CardContent>
