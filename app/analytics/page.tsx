@@ -155,6 +155,26 @@ export default function Analytics() {
     };
   });
 
+  // Calculate daily spending for the last 30 days
+  const last30Days = Array.from({ length: 30 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (29 - i));
+    return date;
+  });
+
+  const last30DaysData = last30Days.map((day) => {
+    const dayTransactions = transactions.filter(
+      (transaction) =>
+        format(transaction.date, "yyyy-MM-dd") === format(day, "yyyy-MM-dd")
+    );
+    const total = dayTransactions.reduce((sum, t) => sum + t.amount, 0);
+    return {
+      date: format(day, "MMM dd"),
+      amount: total,
+      fullDate: format(day, "yyyy-MM-dd"),
+    };
+  });
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -222,6 +242,7 @@ export default function Analytics() {
             <Tab label="Categories" />
             <Tab label="Daily (Month)" />
             <Tab label="Weekly" />
+            <Tab label="Last 30 Days" />
           </Tabs>
 
           <TabPanel value={tabValue} index={0}>
@@ -310,6 +331,39 @@ export default function Analytics() {
                     dataKey="amount"
                     stroke="#8884d8"
                     strokeWidth={3}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </Box>
+          </TabPanel>
+
+          <TabPanel value={tabValue} index={3}>
+            <Typography variant="h6" gutterBottom>
+              Daily Spending - Last 30 Days
+            </Typography>
+            <Box sx={{ width: "100%", height: 400 }}>
+              <ResponsiveContainer>
+                <LineChart data={last30DaysData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="date"
+                    interval="preserveStartEnd"
+                    tick={{ fontSize: 12 }}
+                  />
+                  <YAxis tickFormatter={formatCurrency} />
+                  <Tooltip
+                    formatter={(value: number | undefined) =>
+                      value ? formatCurrency(value) : "Rp 0"
+                    }
+                    labelFormatter={(label) => `Date: ${label}`}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="amount"
+                    stroke="#82ca9d"
+                    strokeWidth={2}
+                    dot={{ fill: "#82ca9d", strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, stroke: "#82ca9d", strokeWidth: 2 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
