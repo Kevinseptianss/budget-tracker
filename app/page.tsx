@@ -77,9 +77,9 @@ export default function BudgetTracker() {
 
   useEffect(() => {
     // Initialize date when component mounts on client
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      date: format(new Date(), "yyyy-MM-dd")
+      date: format(new Date(), "yyyy-MM-dd"),
     }));
   }, []);
 
@@ -105,9 +105,9 @@ export default function BudgetTracker() {
   useEffect(() => {
     loadData();
     // Initialize date when component mounts on client
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      date: format(new Date(), "yyyy-MM-dd")
+      date: format(new Date(), "yyyy-MM-dd"),
     }));
   }, [loadData]);
 
@@ -289,7 +289,7 @@ export default function BudgetTracker() {
             sx={{ display: "flex", alignItems: "center", gap: 1 }}
           >
             <ReceiptIcon />
-            Recent Transactions
+            All Transactions
           </Typography>
           <Divider sx={{ mb: 2 }} />
 
@@ -303,7 +303,7 @@ export default function BudgetTracker() {
             </Typography>
           ) : (
             <List>
-              {transactions.slice(0, 5).map((transaction) => (
+              {transactions.map((transaction) => (
                 <ListItem
                   key={transaction.id}
                   sx={{ px: 0, cursor: "pointer" }}
