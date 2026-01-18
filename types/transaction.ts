@@ -4,6 +4,7 @@ export interface Transaction {
   description: string;
   category: string; // Will be category ID or name
   date: Date;
+  title?: string; // Trip title for grouping transactions
   createdAt?: Date;
   updatedAt?: Date;
 }

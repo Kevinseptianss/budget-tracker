@@ -14,46 +14,6 @@ import { db } from "../lib/firebase";
 import { Transaction, TransactionFormData } from "../types/transaction";
 
 const COLLECTION_NAME = "transactions";
-const LOCAL_STORAGE_KEY = "budget-tracker-transactions";
-
-// Type for stored transaction data (with string dates)
-interface StoredTransaction {
-  id?: string;
-  amount: number;
-  description: string;
-  category: string;
-  date: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-// Local storage helpers
-const getLocalTransactions = (): Transaction[] => {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-    return stored
-      ? JSON.parse(stored).map((t: StoredTransaction) => ({
-          ...t,
-          date: new Date(t.date),
-          createdAt: t.createdAt ? new Date(t.createdAt) : undefined,
-          updatedAt: t.updatedAt ? new Date(t.updatedAt) : undefined,
-        }))
-      : [];
-  } catch (error) {
-    console.error("Error reading from local storage:", error);
-    return [];
-  }
-};
-
-const saveLocalTransactions = (transactions: Transaction[]): void => {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(transactions));
-  } catch (error) {
-    console.error("Error saving to local storage:", error);
-  }
-};
 
 const isOnline = (): boolean => {
   return typeof navigator !== "undefined" ? navigator.onLine : true;
@@ -62,162 +22,122 @@ const isOnline = (): boolean => {
 export const addTransaction = async (
   transactionData: TransactionFormData
 ): Promise<string> => {
-  const newTransaction: Transaction = {
-    ...transactionData,
-    id: Date.now().toString(), // Generate local ID
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  if (isOnline()) {
-    try {
-      const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-        ...transactionData,
-        date: Timestamp.fromDate(transactionData.date),
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      });
-      newTransaction.id = docRef.id;
-    } catch (error) {
-      console.error("Error adding to Firebase, saving locally:", error);
-    }
+  if (!isOnline()) {
+    throw new Error(
+      "Cannot add transaction: No internet connection. Please check your connection and try again."
+    );
   }
 
-  // Always save to local storage
-  const localTransactions = getLocalTransactions();
-  localTransactions.push(newTransaction);
-  saveLocalTransactions(localTransactions);
+  try {
+    const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+      ...transactionData,
+      date: Timestamp.fromDate(transactionData.date),
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
 
-  return newTransaction.id!;
+    return docRef.id;
+  } catch (error) {
+    console.error("Error adding transaction to Firebase:", error);
+    throw new Error("Failed to add transaction. Please try again.");
+  }
 };
 
 export const updateTransaction = async (
   id: string,
   transactionData: Partial<TransactionFormData>
 ): Promise<void> => {
-  const localTransactions = getLocalTransactions();
-  const transactionIndex = localTransactions.findIndex((t) => t.id === id);
-
-  if (transactionIndex !== -1) {
-    localTransactions[transactionIndex] = {
-      ...localTransactions[transactionIndex],
-      ...transactionData,
-      updatedAt: new Date(),
-    };
-    saveLocalTransactions(localTransactions);
+  if (!isOnline()) {
+    throw new Error(
+      "Cannot update transaction: No internet connection. Please check your connection and try again."
+    );
   }
 
-  if (isOnline()) {
-    try {
-      const docRef = doc(db, COLLECTION_NAME, id);
-      const updateData: {
-        amount?: number;
-        description?: string;
-        category?: string;
-        date?: Timestamp;
-        updatedAt: Timestamp;
-      } = {
-        updatedAt: Timestamp.now(),
-      };
+  if (!id) {
+    throw new Error("Invalid transaction ID");
+  }
 
-      if (transactionData.amount !== undefined)
-        updateData.amount = transactionData.amount;
-      if (transactionData.description !== undefined)
-        updateData.description = transactionData.description;
-      if (transactionData.category !== undefined)
-        updateData.category = transactionData.category;
-      if (transactionData.date)
-        updateData.date = Timestamp.fromDate(transactionData.date);
+  try {
+    const docRef = doc(db, COLLECTION_NAME, id);
+    const updateData: {
+      amount?: number;
+      description?: string;
+      category?: string;
+      date?: Timestamp;
+      updatedAt: Timestamp;
+    } = {
+      updatedAt: Timestamp.now(),
+    };
 
-      if (transactionData.date) {
-        updateData.date = Timestamp.fromDate(transactionData.date);
-      }
+    if (transactionData.amount !== undefined)
+      updateData.amount = transactionData.amount;
+    if (transactionData.description !== undefined)
+      updateData.description = transactionData.description;
+    if (transactionData.category !== undefined)
+      updateData.category = transactionData.category;
+    if (transactionData.date)
+      updateData.date = Timestamp.fromDate(transactionData.date);
 
-      await updateDoc(docRef, updateData);
-    } catch (error) {
-      console.error("Error updating Firebase transaction:", error);
-    }
+    await updateDoc(docRef, updateData);
+  } catch (error) {
+    console.error("Error updating Firebase transaction:", error);
+    throw new Error("Failed to update transaction. Please try again.");
   }
 };
 
 export const deleteTransaction = async (id: string): Promise<void> => {
-  const localTransactions = getLocalTransactions();
-  const filteredTransactions = localTransactions.filter((t) => t.id !== id);
-  saveLocalTransactions(filteredTransactions);
+  if (!isOnline()) {
+    throw new Error(
+      "Cannot delete transaction: No internet connection. Please check your connection and try again."
+    );
+  }
 
-  if (isOnline()) {
-    try {
-      await deleteDoc(doc(db, COLLECTION_NAME, id));
-    } catch (error) {
-      console.error("Error deleting Firebase transaction:", error);
-    }
+  if (!id) {
+    throw new Error("Invalid transaction ID");
+  }
+
+  try {
+    await deleteDoc(doc(db, COLLECTION_NAME, id));
+  } catch (error) {
+    console.error("Error deleting transaction from Firebase:", error);
+    throw new Error("Failed to delete transaction. Please try again.");
   }
 };
 
 export const getTransactions = async (): Promise<Transaction[]> => {
-  let firebaseTransactions: Transaction[] = [];
-  const localTransactions = getLocalTransactions();
-
-  if (isOnline()) {
-    try {
-      const q = query(collection(db, COLLECTION_NAME), orderBy("date", "desc"));
-      const querySnapshot = await getDocs(q);
-
-      firebaseTransactions = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date?.toDate() || new Date(),
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate(),
-      })) as Transaction[];
-
-      // Sync local transactions to Firebase if they don't exist
-      for (const localTransaction of localTransactions) {
-        const existsInFirebase = firebaseTransactions.some(
-          (ft) => ft.id === localTransaction.id
-        );
-        if (!existsInFirebase && localTransaction.id) {
-          try {
-            await addDoc(collection(db, COLLECTION_NAME), {
-              amount: localTransaction.amount,
-              description: localTransaction.description,
-              category: localTransaction.category,
-              date: Timestamp.fromDate(localTransaction.date),
-              createdAt: Timestamp.fromDate(
-                localTransaction.createdAt || new Date()
-              ),
-              updatedAt: Timestamp.fromDate(
-                localTransaction.updatedAt || new Date()
-              ),
-            });
-            firebaseTransactions.push(localTransaction);
-          } catch (error) {
-            console.error(
-              "Error syncing local transaction to Firebase:",
-              error
-            );
-          }
-        }
-      }
-
-      // Update local storage with Firebase data
-      saveLocalTransactions(firebaseTransactions);
-      return firebaseTransactions;
-    } catch (error) {
-      console.error(
-        "Error getting transactions from Firebase, using local data:",
-        error
-      );
-    }
+  if (!isOnline()) {
+    throw new Error(
+      "Cannot load transactions: No internet connection. Please check your connection and try again."
+    );
   }
 
-  return localTransactions;
+  try {
+    const q = query(collection(db, COLLECTION_NAME), orderBy("date", "desc"));
+    const querySnapshot = await getDocs(q);
+
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+      date: doc.data().date?.toDate() || new Date(),
+      createdAt: doc.data().createdAt?.toDate(),
+      updatedAt: doc.data().updatedAt?.toDate(),
+    })) as Transaction[];
+  } catch (error) {
+    console.error("Error getting transactions from Firebase:", error);
+    throw new Error("Failed to load transactions. Please try again.");
+  }
 };
 
 export const getTransactionsByDateRange = async (
   startDate: Date,
   endDate: Date
 ): Promise<Transaction[]> => {
+  if (!isOnline()) {
+    throw new Error(
+      "Cannot load transactions: No internet connection. Please check your connection and try again."
+    );
+  }
+
   try {
     const q = query(
       collection(db, COLLECTION_NAME),
@@ -236,7 +156,7 @@ export const getTransactionsByDateRange = async (
     })) as Transaction[];
   } catch (error) {
     console.error("Error getting transactions by date range:", error);
-    throw error;
+    throw new Error("Failed to load transactions. Please try again.");
   }
 };
 
@@ -249,6 +169,6 @@ export const getTotalSpent = async (): Promise<number> => {
     );
   } catch (error) {
     console.error("Error calculating total spent:", error);
-    return 0;
+    throw new Error("Failed to calculate total spent. Please try again.");
   }
 };

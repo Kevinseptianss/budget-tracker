@@ -39,6 +39,8 @@ import {
 } from "date-fns";
 import { Transaction } from "../../types/transaction";
 import { getTransactions } from "../../services/transactionService";
+import { getCategories } from "../../services/categoryService";
+import { Category } from "../../types/category";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -75,18 +77,23 @@ const COLORS = [
 
 export default function Analytics() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
 
   useEffect(() => {
-    loadTransactions();
+    loadData();
   }, []);
 
-  const loadTransactions = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const transactionsData = await getTransactions();
+      const [transactionsData, categoriesData] = await Promise.all([
+        getTransactions(),
+        getCategories(),
+      ]);
       setTransactions(transactionsData);
+      setCategories(categoriesData);
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -100,17 +107,25 @@ export default function Analytics() {
 
   // Calculate category spending
   const categoryData = transactions.reduce(
-    (acc: { category: string; amount: number }[], transaction) => {
+    (acc: { name: string; value: number; category: string }[], transaction) => {
       const existing = acc.find(
-        (item: { category: string; amount: number }) =>
-          item.category === transaction.category
+        (item) => item.category === transaction.category
       );
       if (existing) {
-        existing.amount += transaction.amount;
+        existing.value += transaction.amount;
       } else {
+        // Get the proper category name from categories list
+        const categoryInfo = categories.find(
+          (cat) => cat.name === transaction.category
+        );
+        const displayName = categoryInfo
+          ? categoryInfo.name
+          : transaction.category;
+
         acc.push({
+          name: displayName,
+          value: transaction.amount,
           category: transaction.category,
-          amount: transaction.amount,
         });
       }
       return acc;
@@ -255,20 +270,22 @@ export default function Analytics() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({
-                      name,
-                      percent,
-                    }: {
-                      name?: string;
-                      percent?: number;
-                    }) => `${name || ""} ${((percent || 0) * 100).toFixed(0)}%`}
+                    label={(entry) =>
+                      `${entry.name} ${((entry.percent || 0) * 100).toFixed(
+                        0
+                      )}%`
+                    }
                     outerRadius={120}
                     fill="#8884d8"
-                    dataKey="amount"
+                    dataKey="value"
                   >
                     {categoryData.map(
                       (
-                        entry: { category: string; amount: number },
+                        entry: {
+                          name: string;
+                          value: number;
+                          category: string;
+                        },
                         index: number
                       ) => (
                         <Cell

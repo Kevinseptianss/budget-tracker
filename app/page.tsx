@@ -12,7 +12,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  IconButton,
   Chip,
   Dialog,
   DialogTitle,
@@ -34,8 +33,7 @@ import {
   AccountBalanceWallet as WalletIcon,
   TrendingUp as TrendingUpIcon,
   Receipt as ReceiptIcon,
-  Analytics as AnalyticsIcon,
-  Category as CategoryIcon,
+  Search as SearchIcon,
 } from "@mui/icons-material";
 import { format } from "date-fns";
 import { Transaction } from "../types/transaction";
@@ -44,17 +42,31 @@ import {
   addTransaction,
   updateTransaction,
   deleteTransaction,
-  getTotalSpent,
 } from "../services/transactionService";
 import { getCategories } from "../services/categoryService";
 import { Category } from "../types/category";
+import SaveBudgetModal from "../components/SaveBudgetModal";
+import { saveBudgetToHistory } from "../services/historyService";
 
 export default function BudgetTracker() {
+  const [currentTripTitle, setCurrentTripTitle] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [totalSpent, setTotalSpent] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [amountInputFocused, setAmountInputFocused] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [saveBudgetModalOpen, setSaveBudgetModalOpen] = useState(false);
+
+  // Get trip parameter from URL
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const trip = urlParams.get("trip");
+      setCurrentTripTitle(trip);
+    }
+  }, []);
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
   const [snackbar, setSnackbar] = useState<{
@@ -86,30 +98,40 @@ export default function BudgetTracker() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [transactionsData, categoriesData, total] = await Promise.all([
+      const [transactionsData, categoriesData] = await Promise.all([
         getTransactions(),
         getCategories(),
-        getTotalSpent(),
       ]);
+
       setTransactions(transactionsData);
       setCategories(categoriesData);
-      setTotalSpent(total);
     } catch (error) {
       console.error("Error loading data:", error);
-      showSnackbar("Error loading data", "error");
+      const errorMessage =
+        error instanceof Error ? error.message : "Error loading data";
+      showSnackbar(errorMessage, "error");
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Load data on component mount
   useEffect(() => {
     loadData();
-    // Initialize date when component mounts on client
-    setFormData((prev) => ({
-      ...prev,
-      date: format(new Date(), "yyyy-MM-dd"),
-    }));
   }, [loadData]);
+
+  // Calculate filtered transactions and total whenever transactions or currentTripTitle changes
+  useEffect(() => {
+    const filteredTransactions = currentTripTitle
+      ? transactions.filter((t) => t.title === currentTripTitle)
+      : transactions.filter((t) => !t.title);
+
+    const total = filteredTransactions.reduce(
+      (sum, transaction) => sum + transaction.amount,
+      0
+    );
+    setTotalSpent(total);
+  }, [transactions, currentTripTitle]);
 
   const showSnackbar = (
     message: string,
@@ -122,14 +144,32 @@ export default function BudgetTracker() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const resetForm = () => {
-    setFormData({
-      amount: "",
-      description: "",
-      category: "",
-      date: format(new Date(), "yyyy-MM-dd"),
-    });
-    setEditingTransaction(null);
+  const handleSaveBudget = async (title: string) => {
+    try {
+      // Save current budget to history
+      await saveBudgetToHistory(title);
+
+      // Delete all current transactions to start fresh
+      const currentTransactions = [...transactions];
+      for (const transaction of currentTransactions) {
+        if (transaction.id) {
+          await deleteTransaction(transaction.id);
+        }
+      }
+
+      // Reload data to reflect empty state
+      await loadData();
+
+      showSnackbar("Budget saved to history and reset successfully!");
+    } catch (error) {
+      console.error("Error saving budget to history:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to save budget to history";
+      showSnackbar(errorMessage, "error");
+      throw error; // Re-throw to let the modal handle it
+    }
   };
 
   const handleOpenDialog = (transaction?: Transaction) => {
@@ -150,6 +190,17 @@ export default function BudgetTracker() {
   const handleCloseDialog = () => {
     setDialogOpen(false);
     resetForm();
+  };
+
+  const resetForm = () => {
+    setFormData({
+      amount: "",
+      description: "",
+      category: "",
+      date: format(new Date(), "yyyy-MM-dd"),
+    });
+    setEditingTransaction(null);
+    setAmountInputFocused(false);
   };
 
   const handleSubmit = async () => {
@@ -181,23 +232,38 @@ export default function BudgetTracker() {
       }
 
       handleCloseDialog();
-      loadData();
+      await loadData();
     } catch (error) {
       console.error("Error saving transaction:", error);
-      showSnackbar("Error saving transaction", "error");
+      const errorMessage =
+        error instanceof Error ? error.message : "Error saving transaction";
+      showSnackbar(errorMessage, "error");
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this transaction?")) {
-      try {
-        await deleteTransaction(id);
-        showSnackbar("Transaction deleted successfully");
-        loadData();
-      } catch (error) {
-        console.error("Error deleting transaction:", error);
-        showSnackbar("Error deleting transaction", "error");
-      }
+    try {
+      // Save current scroll position
+      const scrollPosition = window.scrollY;
+
+      // Optimistically remove from UI immediately
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+
+      await deleteTransaction(id);
+      showSnackbar("Transaction deleted successfully");
+
+      // No need to reload data after successful deletion - optimistic update is sufficient
+      // Restore scroll position
+      setTimeout(() => {
+        window.scrollTo(0, scrollPosition);
+      }, 100);
+    } catch (error) {
+      console.error("Error deleting transaction:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Error deleting transaction";
+      showSnackbar(errorMessage, "error");
+      // Restore the transaction in UI if deletion failed
+      await loadData();
     }
   };
 
@@ -208,6 +274,68 @@ export default function BudgetTracker() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const formatAmountForDisplay = (value: string) => {
+    if (!value || value === "") return "";
+    // Remove any existing formatting and parse
+    const cleanValue = value.replace(/[^\d]/g, "");
+    if (cleanValue === "") return "";
+    // Format with thousand separators (Indonesian style with dots)
+    return cleanValue.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
+  const parseAmountFromInput = (inputValue: string) => {
+    // Remove all non-numeric characters
+    return inputValue.replace(/[^\d]/g, "");
+  };
+
+  const getFilteredAndGroupedTransactions = () => {
+    // First filter by trip title: show only transactions without title, or with current trip title
+    let tripFiltered = transactions;
+    if (currentTripTitle) {
+      tripFiltered = transactions.filter((t) => t.title === currentTripTitle);
+    } else {
+      tripFiltered = transactions.filter((t) => !t.title);
+    }
+
+    // Then filter by search query
+    const filtered = tripFiltered.filter(
+      (transaction) =>
+        transaction.description
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        transaction.category.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    // Group by date
+    const grouped: { [key: string]: Transaction[] } = {};
+    filtered.forEach((transaction) => {
+      const dateKey = format(transaction.date, "yyyy-MM-dd");
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey].push(transaction);
+    });
+
+    // Sort transactions within each group by createdAt (latest first)
+    Object.keys(grouped).forEach((dateKey) => {
+      grouped[dateKey].sort((a, b) => {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime; // Latest first
+      });
+    });
+
+    // Sort dates in descending order (most recent first)
+    const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+    return { grouped, sortedDates };
+  };
+
+  const getCategoryColor = (categoryName: string): string => {
+    const category = categories.find((cat) => cat.name === categoryName);
+    return category?.color || "#1976d2"; // Default to primary blue if no color found
   };
 
   if (loading) {
@@ -243,19 +371,62 @@ export default function BudgetTracker() {
             <WalletIcon color="primary" />
             Budget Tracker
           </Typography>
-          <Link href="/analytics" passHref>
-            <IconButton color="primary" size="large">
-              <AnalyticsIcon />
-            </IconButton>
-          </Link>
-          <Link href="/categories" passHref>
-            <IconButton color="primary" size="large">
-              <CategoryIcon />
-            </IconButton>
-          </Link>
+
+          {/* Navigation Buttons */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            {currentTripTitle && (
+              <Link href="/" passHref style={{ textDecoration: "none" }}>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  size="small"
+                  sx={{ textTransform: "none" }}
+                >
+                  ← Back to Current
+                </Button>
+              </Link>
+            )}
+            <Link href="/analytics" passHref style={{ textDecoration: "none" }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                size="small"
+                sx={{ textTransform: "none" }}
+              >
+                Analytics
+              </Button>
+            </Link>
+            <Link
+              href="/categories"
+              passHref
+              style={{ textDecoration: "none" }}
+            >
+              <Button
+                variant="outlined"
+                color="primary"
+                size="small"
+                sx={{ textTransform: "none" }}
+              >
+                Categories
+              </Button>
+            </Link>
+            <Link href="/history" passHref style={{ textDecoration: "none" }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                size="small"
+                sx={{ textTransform: "none" }}
+              >
+                History
+              </Button>
+            </Link>
+          </Box>
         </Box>
+
         <Typography variant="body1" color="text.secondary">
-          Track your travel expenses
+          {currentTripTitle
+            ? `Viewing transactions for: ${currentTripTitle}`
+            : "Track your travel expenses"}
         </Typography>
       </Box>
 
@@ -289,8 +460,28 @@ export default function BudgetTracker() {
             sx={{ display: "flex", alignItems: "center", gap: 1 }}
           >
             <ReceiptIcon />
-            All Transactions
+            {currentTripTitle
+              ? `Trip: ${currentTripTitle}`
+              : "Current Transactions"}
           </Typography>
+
+          {/* Search Box */}
+          <Box sx={{ mb: 2 }}>
+            <TextField
+              fullWidth
+              variant="outlined"
+              placeholder="Search transactions by description or category..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <SearchIcon sx={{ color: "action.active", mr: 1 }} />
+                ),
+              }}
+              size="small"
+            />
+          </Box>
+
           <Divider sx={{ mb: 2 }} />
 
           {transactions.length === 0 ? (
@@ -302,56 +493,137 @@ export default function BudgetTracker() {
               No transactions yet. Add your first expense!
             </Typography>
           ) : (
-            <List>
-              {transactions.map((transaction) => (
-                <ListItem
-                  key={transaction.id}
-                  sx={{ px: 0, cursor: "pointer" }}
-                  onClick={() => handleOpenDialog(transaction)}
+            (() => {
+              const { grouped, sortedDates } =
+                getFilteredAndGroupedTransactions();
+              const hasResults = sortedDates.length > 0;
+
+              return !hasResults ? (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ textAlign: "center", py: 4 }}
                 >
-                  <ListItemText
-                    primary={
+                  No transactions match your search.
+                </Typography>
+              ) : (
+                sortedDates.map((dateKey) => {
+                  const dayTransactions = grouped[dateKey];
+                  const totalForDay = dayTransactions.reduce(
+                    (sum, t) => sum + t.amount,
+                    0
+                  );
+
+                  return (
+                    <Box key={dateKey} sx={{ mb: 3 }}>
+                      {/* Date Header */}
                       <Box
                         sx={{
                           display: "flex",
-                          alignItems: "center",
                           justifyContent: "space-between",
-                          width: "100%",
+                          alignItems: "center",
+                          mb: 1,
+                          pb: 1,
+                          borderBottom: "1px solid",
+                          borderColor: "divider",
                         }}
                       >
-                        <Box
-                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
-                        >
-                          <Typography
-                            variant="subtitle1"
-                            sx={{ fontWeight: "medium" }}
-                          >
-                            {transaction.description}
-                          </Typography>
-                          <Chip
-                            label={transaction.category}
-                            size="small"
-                            color="primary"
-                            variant="outlined"
-                          />
-                        </Box>
                         <Typography
                           variant="h6"
-                          color="primary"
-                          sx={{ fontWeight: "bold" }}
+                          sx={{ fontWeight: "bold", color: "primary.main" }}
                         >
-                          {formatCurrency(transaction.amount)}
+                          {format(new Date(dateKey), "d MMMM yyyy")}
+                        </Typography>
+                        <Typography
+                          variant="subtitle1"
+                          sx={{ fontWeight: "bold", color: "primary.main" }}
+                        >
+                          {formatCurrency(totalForDay)}
                         </Typography>
                       </Box>
-                    }
-                    secondary={format(transaction.date, "MMM dd, yyyy")}
-                  />
-                </ListItem>
-              ))}
-            </List>
+
+                      {/* Transactions for this date */}
+                      <List sx={{ py: 0 }}>
+                        {dayTransactions.map((transaction) => (
+                          <ListItem
+                            key={transaction.id}
+                            sx={{ px: 0, cursor: "pointer" }}
+                            onClick={() => handleOpenDialog(transaction)}
+                          >
+                            <ListItemText
+                              primary={
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    width: "100%",
+                                  }}
+                                >
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 1,
+                                    }}
+                                  >
+                                    <Typography
+                                      variant="subtitle1"
+                                      sx={{ fontWeight: "medium" }}
+                                    >
+                                      {transaction.description}
+                                    </Typography>
+                                    <Chip
+                                      label={transaction.category}
+                                      size="small"
+                                      variant="outlined"
+                                      sx={{
+                                        borderColor: getCategoryColor(
+                                          transaction.category
+                                        ),
+                                        color: getCategoryColor(
+                                          transaction.category
+                                        ),
+                                        "& .MuiChip-label": {
+                                          fontWeight: "medium",
+                                        },
+                                      }}
+                                    />
+                                  </Box>
+                                  <Typography
+                                    variant="h6"
+                                    color="primary"
+                                    sx={{ fontWeight: "bold" }}
+                                  >
+                                    {formatCurrency(transaction.amount)}
+                                  </Typography>
+                                </Box>
+                              }
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Box>
+                  );
+                })
+              );
+            })()
           )}
         </CardContent>
       </Card>
+
+      {/* Save Budget Button */}
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 3, mb: 2 }}>
+        <Button
+          variant="contained"
+          color="secondary"
+          size="large"
+          sx={{ textTransform: "none", px: 4, py: 1.5 }}
+          onClick={() => setSaveBudgetModalOpen(true)}
+        >
+          Save Budget
+        </Button>
+      </Box>
 
       {/* Add Transaction FAB */}
       <Fab
@@ -381,17 +653,6 @@ export default function BudgetTracker() {
         <DialogContent>
           <Box sx={{ pt: 1, display: "flex", flexDirection: "column", gap: 2 }}>
             <TextField
-              label="Amount"
-              type="number"
-              value={formData.amount}
-              onChange={(e) =>
-                setFormData({ ...formData, amount: e.target.value })
-              }
-              fullWidth
-              required
-              inputProps={{ step: "0.01", min: "0" }}
-            />
-            <TextField
               label="Description"
               value={formData.description}
               onChange={(e) =>
@@ -401,6 +662,31 @@ export default function BudgetTracker() {
               required
               multiline
               rows={2}
+            />
+            <TextField
+              label="Amount (Rp)"
+              type="text"
+              value={
+                amountInputFocused
+                  ? formData.amount
+                  : formatAmountForDisplay(formData.amount)
+              }
+              onChange={(e) => {
+                const rawValue = parseAmountFromInput(e.target.value);
+                setFormData({ ...formData, amount: rawValue });
+              }}
+              onFocus={() => {
+                setAmountInputFocused(true);
+              }}
+              onBlur={() => {
+                setAmountInputFocused(false);
+              }}
+              fullWidth
+              required
+              placeholder="0"
+              InputProps={{
+                startAdornment: <Typography sx={{ mr: 1 }}>Rp</Typography>,
+              }}
             />
             <FormControl fullWidth required>
               <InputLabel>Category</InputLabel>
@@ -478,6 +764,13 @@ export default function BudgetTracker() {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Save Budget Modal */}
+      <SaveBudgetModal
+        isOpen={saveBudgetModalOpen}
+        onClose={() => setSaveBudgetModalOpen(false)}
+        onSave={handleSaveBudget}
+      />
     </Container>
   );
 }
