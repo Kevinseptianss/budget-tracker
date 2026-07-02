@@ -886,17 +886,6 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
             }}
           />
         </Card>
-        <Typography
-          sx={{
-            textAlign: "center",
-            fontSize: "0.7rem",
-            color: "#8e8e93",
-            mt: 1,
-            opacity: 0.7,
-          }}
-        >
-          Finly can add transactions & analyze your spending
-        </Typography>
       </Box>
 
       <Snackbar
