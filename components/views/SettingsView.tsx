@@ -24,6 +24,7 @@ import {
   Key as KeyIcon,
 } from "@mui/icons-material";
 import StatsView from "./StatsView";
+import { getApiKey, saveApiKey } from "../../services/settingsService";
 
 export default function SettingsView() {
   const [apiKey, setApiKey] = useState("");
@@ -39,18 +40,28 @@ export default function SettingsView() {
   });
   const [showStats, setShowStats] = useState(false);
 
+  const [saving, setSaving] = useState(false);
+
   React.useEffect(() => {
-    const stored = localStorage.getItem("siliconflow_api_key");
-    if (stored) setApiKey(stored);
+    getApiKey().then((key) => {
+      if (key) setApiKey(key);
+    });
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!apiKey.trim()) {
       setSnackbar({ open: true, message: "API key cannot be empty", severity: "error" });
       return;
     }
-    localStorage.setItem("siliconflow_api_key", apiKey.trim());
-    setSnackbar({ open: true, message: "API key saved!", severity: "success" });
+    setSaving(true);
+    try {
+      await saveApiKey(apiKey.trim());
+      setSnackbar({ open: true, message: "API key saved to cloud!", severity: "success" });
+    } catch {
+      setSnackbar({ open: true, message: "Failed to save API key", severity: "error" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCloseSnackbar = () => {
@@ -118,11 +129,12 @@ export default function SettingsView() {
           />
           <Button
             variant="contained"
-            startIcon={<SaveIcon />}
+            startIcon={saving ? <CheckIcon /> : <SaveIcon />}
             onClick={handleSave}
+            disabled={saving}
             sx={{ borderRadius: 14 }}
           >
-            Save API Key
+            {saving ? "Saving..." : "Save API Key"}
           </Button>
         </CardContent>
       </Card>

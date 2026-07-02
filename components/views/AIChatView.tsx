@@ -42,6 +42,7 @@ import {
   saveBudgetToHistory,
   getHistoryEntries,
 } from "../../services/historyService";
+import { getApiKey } from "../../services/settingsService";
 import { HistoryEntry } from "../../types/history";
 import ReactMarkdown from "react-markdown";
 
@@ -84,6 +85,7 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
   });
   const [dataLoaded, setDataLoaded] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [apiKey, setApiKey] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const showSnackbar = useCallback(
@@ -99,14 +101,16 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
 
   const loadContext = useCallback(async () => {
     try {
-      const [txData, catData, histData] = await Promise.all([
+      const [txData, catData, histData, key] = await Promise.all([
         getTransactions(),
         getCategories(),
         getHistoryEntries().catch(() => [] as HistoryEntry[]),
+        getApiKey().catch(() => null),
       ]);
       setTransactions(txData);
       setCategories(catData);
       setHistory(histData);
+      setApiKey(key);
     } catch (error) {
       console.error("Error loading context:", error);
     } finally {
@@ -440,18 +444,13 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
         content: m.content,
       }));
 
-      const storedKey =
-        typeof window !== "undefined"
-          ? localStorage.getItem("siliconflow_api_key")
-          : null;
-
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: apiMessages,
           context: buildContext(),
-          apiKey: storedKey || undefined,
+          apiKey: apiKey || undefined,
         }),
       });
 
