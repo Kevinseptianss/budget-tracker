@@ -1163,8 +1163,8 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
         open={snackbar.open}
         autoHideDuration={3000}
         onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        sx={{ bottom: 90 }}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+        sx={{ top: 16, right: 16 }}
       >
         <Alert
           onClose={handleCloseSnackbar}
