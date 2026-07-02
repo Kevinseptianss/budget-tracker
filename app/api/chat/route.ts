@@ -32,6 +32,13 @@ interface BudgetContext {
     createdAt: string;
     topCategory: string;
     topCategoryAmount: number;
+    transactions: {
+      id: string;
+      amount: number;
+      description: string;
+      category: string;
+      date: string;
+    }[];
   }[];
 }
 
@@ -82,14 +89,32 @@ ${categoryBreakdown || "No spending yet"}
 ### Recent Transactions (up to 50, with IDs)
 ${txList || "No transactions yet"}
 
-### Saved Budget History
+### Saved Budget History (with full transaction details)
 ${context.history.length > 0
     ? context.history
-        .map(
-          (h) =>
-            `- ID:${h.id} | "${h.title}" | Total: Rp ${h.totalSpent.toLocaleString("id-ID")} | ${h.transactionCount} txns | Top: ${h.topCategory} (Rp ${h.topCategoryAmount.toLocaleString("id-ID")}) | Saved: ${h.createdAt}`
-        )
-        .join("\n")
+        .map((h) => {
+          const hByCat: Record<string, number> = {};
+          h.transactions.forEach((t) => {
+            hByCat[t.category] = (hByCat[t.category] || 0) + t.amount;
+          });
+          const hBreakdown = Object.entries(hByCat)
+            .sort((a, b) => b[1] - a[1])
+            .map(([cat, amt]) => `  - ${cat}: Rp ${amt.toLocaleString("id-ID")}`)
+            .join("\n");
+          const hTxList = h.transactions
+            .map(
+              (t) =>
+                `  - ${t.date} | ${t.description} | ${t.category} | Rp ${t.amount.toLocaleString("id-ID")}`
+            )
+            .join("\n");
+          return `#### "${h.title}" (ID:${h.id})
+  Total: Rp ${h.totalSpent.toLocaleString("id-ID")} | ${h.transactionCount} txns | Saved: ${h.createdAt}
+  Category breakdown:
+${hBreakdown || "  (no transactions)"}
+  Transactions:
+${hTxList || "  (no transactions)"}`;
+        })
+        .join("\n\n")
     : "No saved budgets yet"}
 
 ## Your Capabilities

@@ -12,14 +12,19 @@ import {
   Alert,
   Snackbar,
   CircularProgress,
+  Button,
 } from "@mui/material";
 import {
   SmartToy as RobotIcon,
   Send as SendIcon,
   CheckCircle as CheckIcon,
   Person as PersonIcon,
-  DeleteOutline as ClearIcon,
+  Archive as ArchiveIcon,
   ArrowBack as BackIcon,
+  History as ChatHistoryIcon,
+  Delete as DeleteIcon,
+  Restore as RestoreIcon,
+  Close as CloseIcon,
 } from "@mui/icons-material";
 import { format } from "date-fns";
 import { Transaction } from "../../types/transaction";
@@ -38,6 +43,13 @@ import {
 import { Category } from "../../types/category";
 import { formatCurrency } from "../../lib/formatCurrency";
 import { saveChatMessage, getChatMessages } from "../../services/chatService";
+import {
+  archiveCurrentChat,
+  getArchivedSessions,
+  deleteArchivedSession,
+  clearCurrentMessages,
+  ChatSession,
+} from "../../services/chatSessionService";
 import {
   saveBudgetToHistory,
   getHistoryEntries,
@@ -86,6 +98,9 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [archivedSessions, setArchivedSessions] = useState<ChatSession[]>([]);
+  const [showArchivePanel, setShowArchivePanel] = useState(false);
+  const [viewingSession, setViewingSession] = useState<ChatSession | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const showSnackbar = useCallback(
@@ -131,10 +146,20 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
     }
   }, []);
 
+  const loadArchivedSessions = useCallback(async () => {
+    try {
+      const sessions = await getArchivedSessions();
+      setArchivedSessions(sessions);
+    } catch (error) {
+      console.error("Error loading archived sessions:", error);
+    }
+  }, []);
+
   useEffect(() => {
     loadContext();
     loadChatHistory();
-  }, [loadContext, loadChatHistory]);
+    loadArchivedSessions();
+  }, [loadContext, loadChatHistory, loadArchivedSessions]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -181,12 +206,19 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
           createdAt: format(h.createdAt, "yyyy-MM-dd"),
           topCategory: sorted[0]?.[0] || "N/A",
           topCategoryAmount: sorted[0]?.[1] || 0,
+          transactions: h.transactions.map((t) => ({
+            id: t.id || "",
+            amount: t.amount,
+            description: t.description,
+            category: t.category,
+            date: format(t.date, "yyyy-MM-dd"),
+          })),
         };
       }),
     };
   };
 
-  const executeAction = async (action: PendingAction): Promise<boolean> => {
+  const executeAction = async (action: PendingAction): Promise<string> => {
     try {
       switch (action.type) {
         case "add_transaction": {
@@ -214,7 +246,7 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
             ...prev,
           ]);
           showSnackbar(`${formatCurrency(amount)} added to ${category}`, "success");
-          return true;
+          return `Added: Rp ${amount.toLocaleString("id-ID")} for "${description}" in category "${category}" on ${date}`;
         }
 
         case "delete_transaction": {
@@ -226,7 +258,7 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
             tx ? `Deleted: ${tx.description}` : "Transaction deleted",
             "success"
           );
-          return true;
+          return `Deleted transaction: "${tx?.description || id}" (Rp ${(tx?.amount || 0).toLocaleString("id-ID")})`;
         }
 
         case "update_transaction": {
@@ -257,7 +289,7 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
             )
           );
           showSnackbar("Transaction updated", "success");
-          return true;
+          return `Updated transaction ${id}: ${JSON.stringify(updates)}`;
         }
 
         case "get_transactions": {
@@ -282,22 +314,26 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
             filtered = filtered.filter((t) => t.date <= end);
           }
           const total = filtered.reduce((s, t) => s + t.amount, 0);
-          const summaryText =
-            `Found **${filtered.length}** transaction(s) totaling **Rp ${total.toLocaleString("id-ID")}**` +
-            (category ? ` in **${category}**` : "") +
-            (start_date || end_date
-              ? ` for ${start_date || "start"} to ${end_date || "now"}`
-              : "");
-          showSnackbar(summaryText.replace(/\*\*/g, ""), "success");
-          return true;
+          const detail = filtered
+            .map((t) => `${t.description} (${t.category}) Rp ${t.amount.toLocaleString("id-ID")} on ${format(t.date, "yyyy-MM-dd")}`)
+            .join(", ");
+          showSnackbar(`${filtered.length} txns, Rp ${total.toLocaleString("id-ID")}`, "success");
+          return `Found ${filtered.length} transaction(s) totaling Rp ${total.toLocaleString("id-ID")}. ${detail || "No transactions found."}`;
         }
 
         case "get_summary": {
-          const total = transactions
-            .filter((t) => !t.title)
-            .reduce((s, t) => s + t.amount, 0);
+          const current = transactions.filter((t) => !t.title);
+          const total = current.reduce((s, t) => s + t.amount, 0);
+          const byCat: Record<string, number> = {};
+          current.forEach((t) => {
+            byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+          });
+          const breakdown = Object.entries(byCat)
+            .sort((a, b) => b[1] - a[1])
+            .map(([cat, amt]) => `${cat}: Rp ${amt.toLocaleString("id-ID")}`)
+            .join(", ");
           showSnackbar(`Total: Rp ${total.toLocaleString("id-ID")}`, "success");
-          return true;
+          return `Summary: Total Rp ${total.toLocaleString("id-ID")} across ${current.length} transactions. Breakdown: ${breakdown || "none"}`;
         }
 
         case "analyze_spending": {
@@ -313,11 +349,11 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
           const pct = total > 0 ? ((topAmt / total) * 100).toFixed(1) : "0";
           const days = new Set(current.map((t) => format(t.date, "yyyy-MM-dd"))).size;
           const avg = days > 0 ? Math.round(total / days) : 0;
-          showSnackbar(
-            `Analyzed: Rp ${total.toLocaleString("id-ID")} total, ${current.length} txns, Rp ${avg.toLocaleString("id-ID")}/day`,
-            "success"
-          );
-          return true;
+          const breakdown = sorted
+            .map(([cat, amt]) => `${cat}: Rp ${amt.toLocaleString("id-ID")} (${total > 0 ? ((amt / total) * 100).toFixed(1) : 0}%)`)
+            .join(", ");
+          showSnackbar(`Rp ${total.toLocaleString("id-ID")} total, Rp ${avg.toLocaleString("id-ID")}/day`, "success");
+          return `Analysis: Total Rp ${total.toLocaleString("id-ID")}, ${current.length} transactions, ${days} active days, Rp ${avg.toLocaleString("id-ID")}/day average. Top category: ${topCat} (Rp ${topAmt.toLocaleString("id-ID")}, ${pct}%). Full breakdown: ${breakdown}`;
         }
 
         case "save_budget": {
@@ -326,25 +362,31 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
           const histData = await getHistoryEntries().catch(() => [] as HistoryEntry[]);
           setHistory(histData);
           showSnackbar(`Budget saved as "${title}"`, "success");
-          return true;
+          return `Budget saved as "${title}". It is now in history with ${transactions.filter((t) => !t.title).length} transactions.`;
         }
 
         case "get_history": {
           const histData = await getHistoryEntries().catch(() => [] as HistoryEntry[]);
           setHistory(histData);
-          const summary = histData
-            .map(
-              (h) =>
-                `${h.title}: Rp ${h.transactions.reduce((s, t) => s + t.amount, 0).toLocaleString("id-ID")}`
-            )
-            .join(", ");
+          const detail = histData
+            .map((h) => {
+              const hTotal = h.transactions.reduce((s, t) => s + t.amount, 0);
+              const hByCat: Record<string, number> = {};
+              h.transactions.forEach((t) => {
+                hByCat[t.category] = (hByCat[t.category] || 0) + t.amount;
+              });
+              const hBreakdown = Object.entries(hByCat)
+                .sort((a, b) => b[1] - a[1])
+                .map(([cat, amt]) => `${cat}: Rp ${amt.toLocaleString("id-ID")}`)
+                .join(", ");
+              return `"${h.title}" — Total Rp ${hTotal.toLocaleString("id-ID")}, ${h.transactions.length} txns. Categories: ${hBreakdown}`;
+            })
+            .join(" | ");
           showSnackbar(
-            histData.length > 0
-              ? `${histData.length} budget(s): ${summary}`
-              : "No saved budgets found",
+            histData.length > 0 ? `${histData.length} budget(s) loaded` : "No saved budgets",
             "success"
           );
-          return true;
+          return `History loaded: ${histData.length} budget(s). ${detail || "No saved budgets found."}`;
         }
 
         case "add_category": {
@@ -370,7 +412,7 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
             },
           ]);
           showSnackbar(`Category "${name}" created`, "success");
-          return true;
+          return `Category "${name}" created successfully.`;
         }
 
         case "delete_category": {
@@ -382,7 +424,7 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
             cat ? `Category "${cat.name}" deleted` : "Category deleted",
             "success"
           );
-          return true;
+          return `Category "${cat?.name || id}" deleted.`;
         }
 
         case "update_category": {
@@ -410,12 +452,12 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
             )
           );
           showSnackbar("Category updated", "success");
-          return true;
+          return `Category ${id} updated: ${JSON.stringify(updates)}`;
         }
 
         default:
           console.warn("Unknown action type:", action.type);
-          return false;
+          return `Unknown action: ${action.type}`;
       }
     } catch (error) {
       console.error("Error executing action:", error);
@@ -423,7 +465,7 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
         error instanceof Error ? error.message : "Action failed",
         "error"
       );
-      return false;
+      return `Failed: ${error instanceof Error ? error.message : "Unknown error"}`;
     }
   };
 
@@ -548,8 +590,35 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
     }
   };
 
-  const handleClearChat = () => {
-    setMessages([]);
+  const handleArchiveChat = async () => {
+    if (messages.length === 0) return;
+    try {
+      await archiveCurrentChat(messages);
+      await clearCurrentMessages();
+      setMessages([]);
+      await loadArchivedSessions();
+      showSnackbar("Chat archived", "success");
+    } catch {
+      showSnackbar("Failed to archive chat", "error");
+    }
+  };
+
+  const handleDeleteArchived = async (id: string) => {
+    try {
+      await deleteArchivedSession(id);
+      setArchivedSessions((prev) => prev.filter((s) => s.id !== id));
+      if (viewingSession?.id === id) setViewingSession(null);
+      showSnackbar("Archived chat deleted", "success");
+    } catch {
+      showSnackbar("Failed to delete", "error");
+    }
+  };
+
+  const handleRestoreSession = (session: ChatSession) => {
+    setMessages(session.messages.map((m) => ({ role: m.role, content: m.content })));
+    setViewingSession(null);
+    setShowArchivePanel(false);
+    showSnackbar("Session loaded as current chat", "success");
   };
 
   const hasMessages = messages.length > 0;
@@ -588,19 +657,178 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
               color: "#1c1c1e",
             }}
           >
-            Finly AI
+            {viewingSession ? viewingSession.title : "Finly AI"}
           </Typography>
-          {hasMessages && (
+          {/* Right side: archive + history buttons */}
+          <Box sx={{ position: "absolute", right: 0, display: "flex", gap: 0.5 }}>
+            {hasMessages && (
+              <IconButton
+                onClick={handleArchiveChat}
+                size="small"
+                sx={{
+                  background: "rgba(255,255,255,0.5)",
+                  border: "1px solid rgba(0,0,0,0.06)",
+                }}
+              >
+                <ArchiveIcon sx={{ fontSize: 18, color: "#8e8e93" }} />
+              </IconButton>
+            )}
             <IconButton
-              onClick={handleClearChat}
+              onClick={() => {
+                setShowArchivePanel(!showArchivePanel);
+                setViewingSession(null);
+              }}
               size="small"
-              sx={{ position: "absolute", right: 0 }}
+              sx={{
+                background: showArchivePanel
+                  ? "rgba(10,132,255,0.1)"
+                  : "rgba(255,255,255,0.5)",
+                border: "1px solid rgba(0,0,0,0.06)",
+              }}
             >
-              <ClearIcon sx={{ fontSize: 20, color: "#8e8e93" }} />
+              <ChatHistoryIcon sx={{ fontSize: 18, color: showArchivePanel ? "#0a84ff" : "#8e8e93" }} />
             </IconButton>
-          )}
+          </Box>
         </Box>
       </Box>
+
+      {/* Archive panel */}
+      {showArchivePanel && (
+        <Box
+          className="lg-anim-fade-up"
+          sx={{
+            mb: 1.5,
+            maxHeight: 300,
+            overflowY: "auto",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 700, color: "#1c1c1e" }}>
+              Archived Chats ({archivedSessions.length})
+            </Typography>
+            <IconButton size="small" onClick={() => setShowArchivePanel(false)}>
+              <CloseIcon sx={{ fontSize: 16, color: "#8e8e93" }} />
+            </IconButton>
+          </Box>
+          {archivedSessions.length === 0 ? (
+            <Typography variant="body2" sx={{ color: "#8e8e93", textAlign: "center", py: 2 }}>
+              No archived chats yet
+            </Typography>
+          ) : (
+            archivedSessions.map((session) => (
+              <Box
+                key={session.id}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  px: 1.5,
+                  py: 1.25,
+                  mb: 0.75,
+                  borderRadius: 3,
+                  background: "rgba(255,255,255,0.4)",
+                  border: "1px solid rgba(0,0,0,0.04)",
+                  transition: "all 0.25s ease",
+                  "&:hover": {
+                    background: "rgba(255,255,255,0.7)",
+                  },
+                }}
+              >
+                <Box
+                  onClick={() => setViewingSession(viewingSession?.id === session.id ? null : session)}
+                  sx={{ flex: 1, cursor: "pointer", minWidth: 0 }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 600,
+                      color: "#1c1c1e",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {session.title}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "#8e8e93" }}>
+                    {session.messages.length} msgs • {format(session.createdAt, "d MMM yyyy")}
+                  </Typography>
+                </Box>
+                <IconButton
+                  size="small"
+                  onClick={() => handleRestoreSession(session)}
+                  title="Restore"
+                >
+                  <RestoreIcon sx={{ fontSize: 16, color: "#0a84ff" }} />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => handleDeleteArchived(session.id)}
+                  title="Delete"
+                >
+                  <DeleteIcon sx={{ fontSize: 16, color: "#ff3b30" }} />
+                </IconButton>
+              </Box>
+            ))
+          )}
+        </Box>
+      )}
+
+      {/* Viewing archived session preview */}
+      {viewingSession && (
+        <Box
+          sx={{
+            mb: 1.5,
+            p: 1.5,
+            borderRadius: 3,
+            background: "rgba(10,132,255,0.04)",
+            border: "1px solid rgba(10,132,255,0.1)",
+            maxHeight: 200,
+            overflowY: "auto",
+          }}
+        >
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 700, color: "#1c1c1e" }}>
+              Preview: {viewingSession.title}
+            </Typography>
+            <IconButton size="small" onClick={() => setViewingSession(null)}>
+              <CloseIcon sx={{ fontSize: 16, color: "#8e8e93" }} />
+            </IconButton>
+          </Box>
+          {viewingSession.messages.map((m, i) => (
+            <Box key={i} sx={{ mb: 0.75 }}>
+              <Typography
+                variant="caption"
+                sx={{ fontWeight: 700, color: m.role === "user" ? "#0a84ff" : "#bf5af2" }}
+              >
+                {m.role === "user" ? "You" : "Finly"}
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "#1c1c1e",
+                  fontSize: "0.8rem",
+                  lineHeight: 1.4,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }}
+              >
+                {m.content}
+              </Typography>
+            </Box>
+          ))}
+          <Button
+            size="small"
+            startIcon={<RestoreIcon />}
+            onClick={() => handleRestoreSession(viewingSession)}
+            sx={{ mt: 1, borderRadius: 12, textTransform: "none" }}
+          >
+            Restore as current chat
+          </Button>
+        </Box>
+      )}
 
       {/* Chat area */}
       <Box
