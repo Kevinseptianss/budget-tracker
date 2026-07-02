@@ -8,24 +8,27 @@ export default function NotFound() {
         minHeight: "100vh",
         alignItems: "center",
         justifyContent: "center",
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: "var(--font-geist-sans), sans-serif",
+        position: "relative",
+        zIndex: 1,
       }}
     >
       <div style={{ textAlign: "center" }}>
         <h1
           style={{
-            fontSize: "4rem",
-            fontWeight: "bold",
-            color: "#333",
-            marginBottom: "1rem",
+            fontSize: "5rem",
+            fontWeight: 800,
+            letterSpacing: "-0.04em",
+            color: "#1c1c1e",
+            marginBottom: "0.5rem",
           }}
         >
           404
         </h1>
         <p
           style={{
-            fontSize: "1.25rem",
-            color: "#666",
+            fontSize: "1.1rem",
+            color: "#8e8e93",
           }}
         >
           Page not found

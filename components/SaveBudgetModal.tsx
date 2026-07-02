@@ -81,8 +81,8 @@ export default function SaveBudgetModal({
           </Alert>
         )}
       </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={isLoading}>
+      <DialogActions sx={{ p: 2.5 }}>
+        <Button onClick={handleClose} disabled={isLoading} sx={{ borderRadius: 14 }}>
           Cancel
         </Button>
         <Button
@@ -90,6 +90,7 @@ export default function SaveBudgetModal({
           variant="contained"
           disabled={isLoading || !title.trim()}
           startIcon={isLoading ? <CircularProgress size={16} /> : null}
+          sx={{ borderRadius: 14 }}
         >
           {isLoading ? "Saving..." : "Save Budget"}
         </Button>
