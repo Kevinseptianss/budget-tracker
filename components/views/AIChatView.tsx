@@ -427,6 +427,32 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
     }
   };
 
+  const callAI = async (
+    apiMessages: { role: string; content: string }[],
+    contextData: ReturnType<typeof buildContext>
+  ): Promise<{ reply: string; actions: PendingAction[] }> => {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: apiMessages,
+        context: contextData,
+        apiKey: apiKey || undefined,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to get AI response");
+    }
+
+    return {
+      reply: data.reply || "",
+      actions: (data.actions || []) as PendingAction[],
+    };
+  };
+
   const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return;
 
@@ -439,41 +465,58 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
     try {
       await saveChatMessage({ role: "user", content: text });
 
-      const apiMessages = newMessages.map((m) => ({
+      let apiMessages = newMessages.map((m) => ({
         role: m.role,
         content: m.content,
       }));
 
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: apiMessages,
-          context: buildContext(),
-          apiKey: apiKey || undefined,
-        }),
-      });
+      let contextData = buildContext();
+      let result = await callAI(apiMessages, contextData);
 
-      const data = await response.json();
+      let maxRounds = 3;
+      while (result.actions.length > 0 && maxRounds > 0) {
+        const toolResults: string[] = [];
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to get AI response");
+        for (const action of result.actions) {
+          const success = await executeAction(action);
+          toolResults.push(
+            `Tool "${action.type}" ${success ? "succeeded" : "failed"}.`
+          );
+        }
+
+        await loadContext();
+        contextData = buildContext();
+
+        if (result.reply) {
+          const intermediateMsg: ChatMessage = {
+            role: "assistant",
+            content: result.reply,
+          };
+          setMessages((prev) => [...prev, intermediateMsg]);
+          await saveChatMessage({ role: "assistant", content: result.reply });
+          apiMessages = [...apiMessages, { role: "assistant", content: result.reply }];
+        }
+
+        apiMessages = [
+          ...apiMessages,
+          {
+            role: "user",
+            content: `Tool results: ${toolResults.join(" ")} Please continue and give me the final answer based on these results.`,
+          },
+        ];
+
+        result = await callAI(apiMessages, contextData);
+        maxRounds--;
       }
 
+      const finalReply =
+        result.reply || "Done! Is there anything else I can help with?";
       const assistantMessage: ChatMessage = {
         role: "assistant",
-        content: data.reply,
+        content: finalReply,
       };
       setMessages((prev) => [...prev, assistantMessage]);
-
-      await saveChatMessage({ role: "assistant", content: data.reply });
-
-      if (data.actions && data.actions.length > 0) {
-        for (const action of data.actions) {
-          await executeAction(action);
-        }
-        await loadContext();
-      }
+      await saveChatMessage({ role: "assistant", content: finalReply });
     } catch (error) {
       console.error("Chat error:", error);
       const errContent =

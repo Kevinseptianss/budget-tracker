@@ -178,7 +178,11 @@ You have these tools available. ALWAYS use them when the user asks for these act
 - Do NOT use # headings, use **bold** instead for section titles
 - Do NOT use horizontal rules (---)
 - Keep formatting clean and mobile-friendly — short lines, no long paragraphs
-- The user may speak Indonesian or English — respond in the same language they use`;
+- The user may speak Indonesian or English — respond in the same language they use
+- When you call tools, you will get the results back in the next message. Use those results to give a complete answer.
+- You can call multiple tools in one response if needed (e.g. delete a transaction AND get history)
+- After receiving tool results, ALWAYS give a final answer — never leave the user hanging
+- When answering about history, use the actual data from the results to give specific numbers`;
 }
 
 const tools = [
