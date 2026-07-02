@@ -4,13 +4,13 @@ import React from "react";
 import { Box, Typography } from "@mui/material";
 import {
   AccountBalanceWallet as HomeIcon,
-  Analytics as AnalyticsIcon,
+  SmartToy as AIIcon,
   Category as CategoryIcon,
   History as HistoryIcon,
-  SmartToy as AIIcon,
+  Settings as SettingsIcon,
 } from "@mui/icons-material";
 
-export type ViewName = "home" | "stats" | "tags" | "history" | "ai";
+export type ViewName = "home" | "ai" | "tags" | "history" | "settings";
 
 interface BottomNavProps {
   activeView: ViewName;
@@ -23,10 +23,10 @@ const tabs: {
   icon: React.ComponentType<{ sx?: object }>;
 }[] = [
   { view: "home", label: "Home", icon: HomeIcon },
-  { view: "stats", label: "Stats", icon: AnalyticsIcon },
   { view: "ai", label: "AI", icon: AIIcon },
   { view: "tags", label: "Tags", icon: CategoryIcon },
   { view: "history", label: "History", icon: HistoryIcon },
+  { view: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
 export default function BottomNav({ activeView, onViewChange }: BottomNavProps) {
@@ -58,6 +58,13 @@ export default function BottomNav({ activeView, onViewChange }: BottomNavProps) 
           const Icon = tab.icon;
           const active = activeView === tab.view;
           const isAI = tab.view === "ai";
+          const isSettings = tab.view === "settings";
+          const activeColor = isAI ? "#bf5af2" : isSettings ? "#8e8e93" : "#0a84ff";
+          const activeBg = isAI
+            ? "rgba(191,90,242,0.14)"
+            : isSettings
+            ? "rgba(142,142,147,0.14)"
+            : "rgba(10, 132, 255, 0.12)";
           return (
             <Box
               key={tab.view}
@@ -72,16 +79,10 @@ export default function BottomNav({ activeView, onViewChange }: BottomNavProps) 
                 borderRadius: 4,
                 cursor: "pointer",
                 transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                background: active
-                  ? isAI
-                    ? "rgba(191,90,242,0.14)"
-                    : "rgba(10, 132, 255, 0.12)"
-                  : "transparent",
+                background: active ? activeBg : "transparent",
                 "&:hover": {
                   background: active
-                    ? isAI
-                      ? "rgba(191,90,242,0.18)"
-                      : "rgba(10, 132, 255, 0.15)"
+                    ? activeBg.replace("0.14", "0.18")
                     : "rgba(0, 0, 0, 0.04)",
                 },
                 "&:active": {
@@ -92,11 +93,7 @@ export default function BottomNav({ activeView, onViewChange }: BottomNavProps) 
               <Icon
                 sx={{
                   fontSize: 24,
-                  color: active
-                    ? isAI
-                      ? "#bf5af2"
-                      : "#0a84ff"
-                    : "#8e8e93",
+                  color: active ? activeColor : "#8e8e93",
                   transition: "color 0.3s ease",
                 }}
               />
@@ -104,11 +101,7 @@ export default function BottomNav({ activeView, onViewChange }: BottomNavProps) 
                 sx={{
                   fontSize: "0.62rem",
                   fontWeight: 600,
-                  color: active
-                    ? isAI
-                      ? "#bf5af2"
-                      : "#0a84ff"
-                    : "#8e8e93",
+                  color: active ? activeColor : "#8e8e93",
                   transition: "color 0.3s ease",
                 }}
               >

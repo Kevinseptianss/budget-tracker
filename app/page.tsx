@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Container, Box } from "@mui/material";
+import { Container } from "@mui/material";
 import BottomNav, { ViewName } from "../components/BottomNav";
 import HomeView from "../components/views/HomeView";
-import StatsView from "../components/views/StatsView";
 import TagsView from "../components/views/TagsView";
 import HistoryView from "../components/views/HistoryView";
 import HistoryDetailView from "../components/views/HistoryDetailView";
 import AIChatView from "../components/views/AIChatView";
+import SettingsView from "../components/views/SettingsView";
 
 export default function BudgetTracker() {
   const [activeView, setActiveView] = useState<ViewName>("home");
@@ -63,11 +63,11 @@ export default function BudgetTracker() {
       ) : (
         <>
           {activeView === "home" && <HomeView />}
-          {activeView === "stats" && <StatsView />}
           {activeView === "tags" && <TagsView />}
           {activeView === "history" && (
             <HistoryView onSelectHistory={handleSelectHistory} />
           )}
+          {activeView === "settings" && <SettingsView />}
           <BottomNav activeView={activeView} onViewChange={handleViewChange} />
         </>
       )}

@@ -452,11 +452,18 @@ export async function POST(request: NextRequest) {
     const {
       messages,
       context,
-    }: { messages: ChatMessage[]; context: BudgetContext } = body;
+      apiKey: clientKey,
+    }: {
+      messages: ChatMessage[];
+      context: BudgetContext;
+      apiKey?: string;
+    } = body;
 
-    if (!API_KEY) {
+    const effectiveKey = clientKey?.trim() || API_KEY;
+
+    if (!effectiveKey) {
       return NextResponse.json(
-        { error: "AI API key not configured" },
+        { error: "AI API key not configured. Add your SiliconFlow API key in Settings." },
         { status: 500 }
       );
     }
@@ -484,7 +491,7 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${API_KEY}`,
+        Authorization: `Bearer ${effectiveKey}`,
       },
       body: JSON.stringify(payload),
     });
