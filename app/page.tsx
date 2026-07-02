@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Container } from "@mui/material";
+import { Container, Box } from "@mui/material";
 import BottomNav, { ViewName } from "../components/BottomNav";
 import HomeView from "../components/views/HomeView";
 import TagsView from "../components/views/TagsView";
@@ -54,20 +54,29 @@ export default function BudgetTracker() {
       }}
     >
       {isHistoryDetail ? (
-        <HistoryDetailView
-          historyId={selectedHistoryId!}
-          onBack={handleBackFromHistory}
-        />
+        <Box
+          key={`history-${selectedHistoryId}`}
+          className="lg-anim-view"
+        >
+          <HistoryDetailView
+            historyId={selectedHistoryId!}
+            onBack={handleBackFromHistory}
+          />
+        </Box>
       ) : isAIMode ? (
-        <AIChatView onBack={handleBackFromAI} />
+        <Box key="ai" className="lg-anim-view">
+          <AIChatView onBack={handleBackFromAI} />
+        </Box>
       ) : (
         <>
-          {activeView === "home" && <HomeView />}
-          {activeView === "tags" && <TagsView />}
-          {activeView === "history" && (
-            <HistoryView onSelectHistory={handleSelectHistory} />
-          )}
-          {activeView === "settings" && <SettingsView />}
+          <Box key={activeView} className="lg-anim-view">
+            {activeView === "home" && <HomeView />}
+            {activeView === "tags" && <TagsView />}
+            {activeView === "history" && (
+              <HistoryView onSelectHistory={handleSelectHistory} />
+            )}
+            {activeView === "settings" && <SettingsView />}
+          </Box>
           <BottomNav activeView={activeView} onViewChange={handleViewChange} />
         </>
       )}
