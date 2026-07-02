@@ -13,16 +13,18 @@ import {
   Snackbar,
   CircularProgress,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
 } from "@mui/material";
 import {
   SmartToy as RobotIcon,
   Send as SendIcon,
   CheckCircle as CheckIcon,
   Person as PersonIcon,
-  Archive as ArchiveIcon,
+  DeleteOutline as DeleteIcon,
   ArrowBack as BackIcon,
-  History as ChatHistoryIcon,
-  Delete as DeleteIcon,
+  Chat as ChatHistoryIcon,
   Restore as RestoreIcon,
   Close as CloseIcon,
 } from "@mui/icons-material";
@@ -625,8 +627,9 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
 
   return (
     <Box sx={{ maxWidth: 600, mx: "auto", height: "calc(100vh - 40px)", display: "flex", flexDirection: "column" }}>
-      {/* Title bar with back button */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+      {/* Title bar with back + history (left) and delete/archive (right) */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
+        {/* Left: back + history */}
         <IconButton
           onClick={onBack}
           size="small"
@@ -639,6 +642,20 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
         >
           <BackIcon sx={{ fontSize: 20, color: "#0a84ff" }} />
         </IconButton>
+        <IconButton
+          onClick={() => setShowArchivePanel(true)}
+          size="small"
+          sx={{
+            flexShrink: 0,
+            background: "rgba(255,255,255,0.5)",
+            border: "1px solid rgba(0,0,0,0.06)",
+            "&:hover": { background: "rgba(10,132,255,0.08)" },
+          }}
+        >
+          <ChatHistoryIcon sx={{ fontSize: 20, color: "#0a84ff" }} />
+        </IconButton>
+
+        {/* Center: title */}
         <Box
           sx={{
             display: "flex",
@@ -646,74 +663,106 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
             gap: 0.75,
             flex: 1,
             justifyContent: "center",
-            position: "relative",
           }}
         >
           <RobotIcon sx={{ fontSize: 22, color: "#0a84ff" }} />
-          <Typography
-            variant="h6"
+          <Typography variant="h6" sx={{ fontWeight: 700, color: "#1c1c1e" }}>
+            Finly AI
+          </Typography>
+        </Box>
+
+        {/* Right: delete (archives) */}
+        {hasMessages && (
+          <IconButton
+            onClick={handleArchiveChat}
+            size="small"
             sx={{
-              fontWeight: 700,
-              color: "#1c1c1e",
+              flexShrink: 0,
+              background: "rgba(255,55,48,0.06)",
+              border: "1px solid rgba(255,55,48,0.1)",
+              "&:hover": { background: "rgba(255,55,48,0.12)" },
             }}
           >
-            {viewingSession ? viewingSession.title : "Finly AI"}
-          </Typography>
-          {/* Right side: archive + history buttons */}
-          <Box sx={{ position: "absolute", right: 0, display: "flex", gap: 0.5 }}>
-            {hasMessages && (
-              <IconButton
-                onClick={handleArchiveChat}
-                size="small"
-                sx={{
-                  background: "rgba(255,255,255,0.5)",
-                  border: "1px solid rgba(0,0,0,0.06)",
-                }}
-              >
-                <ArchiveIcon sx={{ fontSize: 18, color: "#8e8e93" }} />
-              </IconButton>
-            )}
-            <IconButton
-              onClick={() => {
-                setShowArchivePanel(!showArchivePanel);
-                setViewingSession(null);
-              }}
-              size="small"
-              sx={{
-                background: showArchivePanel
-                  ? "rgba(10,132,255,0.1)"
-                  : "rgba(255,255,255,0.5)",
-                border: "1px solid rgba(0,0,0,0.06)",
-              }}
-            >
-              <ChatHistoryIcon sx={{ fontSize: 18, color: showArchivePanel ? "#0a84ff" : "#8e8e93" }} />
-            </IconButton>
-          </Box>
-        </Box>
+            <DeleteIcon sx={{ fontSize: 20, color: "#ff3b30" }} />
+          </IconButton>
+        )}
       </Box>
 
-      {/* Archive panel */}
-      {showArchivePanel && (
-        <Box
-          className="lg-anim-fade-up"
-          sx={{
-            mb: 1.5,
-            maxHeight: 300,
-            overflowY: "auto",
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 700, color: "#1c1c1e" }}>
-              Archived Chats ({archivedSessions.length})
-            </Typography>
-            <IconButton size="small" onClick={() => setShowArchivePanel(false)}>
-              <CloseIcon sx={{ fontSize: 16, color: "#8e8e93" }} />
-            </IconButton>
+      {/* Archived chats modal */}
+      <Dialog
+        open={showArchivePanel}
+        onClose={() => {
+          setShowArchivePanel(false);
+          setViewingSession(null);
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <ChatHistoryIcon sx={{ color: "#0a84ff" }} />
+            Archived Chats ({archivedSessions.length})
           </Box>
+          <IconButton
+            size="small"
+            onClick={() => {
+              setShowArchivePanel(false);
+              setViewingSession(null);
+            }}
+          >
+            <CloseIcon sx={{ fontSize: 20, color: "#8e8e93" }} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
           {archivedSessions.length === 0 ? (
-            <Typography variant="body2" sx={{ color: "#8e8e93", textAlign: "center", py: 2 }}>
+            <Typography variant="body2" sx={{ color: "#8e8e93", textAlign: "center", py: 4 }}>
               No archived chats yet
             </Typography>
+          ) : viewingSession ? (
+            <Box>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                <IconButton size="small" onClick={() => setViewingSession(null)}>
+                  <BackIcon sx={{ fontSize: 18, color: "#0a84ff" }} />
+                </IconButton>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: "#1c1c1e" }}>
+                  {viewingSession.title}
+                </Typography>
+              </Box>
+              {viewingSession.messages.map((m, i) => (
+                <Box
+                  key={i}
+                  sx={{
+                    mb: 1.5,
+                    px: 1.5,
+                    py: 1.25,
+                    borderRadius: 3,
+                    background: m.role === "user" ? "rgba(10,132,255,0.06)" : "rgba(191,90,242,0.04)",
+                    border: "1px solid rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 700, color: m.role === "user" ? "#0a84ff" : "#bf5af2" }}
+                  >
+                    {m.role === "user" ? "You" : "Finly"}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: "#1c1c1e", fontSize: "0.85rem", lineHeight: 1.5, mt: 0.25 }}
+                  >
+                    {m.content}
+                  </Typography>
+                </Box>
+              ))}
+              <Button
+                size="small"
+                startIcon={<RestoreIcon />}
+                onClick={() => handleRestoreSession(viewingSession)}
+                sx={{ mt: 1, borderRadius: 12, textTransform: "none" }}
+              >
+                Restore as current chat
+              </Button>
+            </Box>
           ) : (
             archivedSessions.map((session) => (
               <Box
@@ -729,13 +778,11 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
                   background: "rgba(255,255,255,0.4)",
                   border: "1px solid rgba(0,0,0,0.04)",
                   transition: "all 0.25s ease",
-                  "&:hover": {
-                    background: "rgba(255,255,255,0.7)",
-                  },
+                  "&:hover": { background: "rgba(255,255,255,0.7)" },
                 }}
               >
                 <Box
-                  onClick={() => setViewingSession(viewingSession?.id === session.id ? null : session)}
+                  onClick={() => setViewingSession(session)}
                   sx={{ flex: 1, cursor: "pointer", minWidth: 0 }}
                 >
                   <Typography
@@ -754,81 +801,17 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
                     {session.messages.length} msgs • {format(session.createdAt, "d MMM yyyy")}
                   </Typography>
                 </Box>
-                <IconButton
-                  size="small"
-                  onClick={() => handleRestoreSession(session)}
-                  title="Restore"
-                >
+                <IconButton size="small" onClick={() => handleRestoreSession(session)} title="Restore">
                   <RestoreIcon sx={{ fontSize: 16, color: "#0a84ff" }} />
                 </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => handleDeleteArchived(session.id)}
-                  title="Delete"
-                >
+                <IconButton size="small" onClick={() => handleDeleteArchived(session.id)} title="Delete">
                   <DeleteIcon sx={{ fontSize: 16, color: "#ff3b30" }} />
                 </IconButton>
               </Box>
             ))
           )}
-        </Box>
-      )}
-
-      {/* Viewing archived session preview */}
-      {viewingSession && (
-        <Box
-          sx={{
-            mb: 1.5,
-            p: 1.5,
-            borderRadius: 3,
-            background: "rgba(10,132,255,0.04)",
-            border: "1px solid rgba(10,132,255,0.1)",
-            maxHeight: 200,
-            overflowY: "auto",
-          }}
-        >
-          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 700, color: "#1c1c1e" }}>
-              Preview: {viewingSession.title}
-            </Typography>
-            <IconButton size="small" onClick={() => setViewingSession(null)}>
-              <CloseIcon sx={{ fontSize: 16, color: "#8e8e93" }} />
-            </IconButton>
-          </Box>
-          {viewingSession.messages.map((m, i) => (
-            <Box key={i} sx={{ mb: 0.75 }}>
-              <Typography
-                variant="caption"
-                sx={{ fontWeight: 700, color: m.role === "user" ? "#0a84ff" : "#bf5af2" }}
-              >
-                {m.role === "user" ? "You" : "Finly"}
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  color: "#1c1c1e",
-                  fontSize: "0.8rem",
-                  lineHeight: 1.4,
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                }}
-              >
-                {m.content}
-              </Typography>
-            </Box>
-          ))}
-          <Button
-            size="small"
-            startIcon={<RestoreIcon />}
-            onClick={() => handleRestoreSession(viewingSession)}
-            sx={{ mt: 1, borderRadius: 12, textTransform: "none" }}
-          >
-            Restore as current chat
-          </Button>
-        </Box>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Chat area */}
       <Box
