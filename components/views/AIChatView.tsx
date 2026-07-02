@@ -24,7 +24,7 @@ import {
   Person as PersonIcon,
   DeleteOutline as DeleteIcon,
   ArrowBack as BackIcon,
-  Chat as ChatHistoryIcon,
+  Archive as ArchiveIcon,
   Restore as RestoreIcon,
   Close as CloseIcon,
 } from "@mui/icons-material";
@@ -103,6 +103,7 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
   const [archivedSessions, setArchivedSessions] = useState<ChatSession[]>([]);
   const [showArchivePanel, setShowArchivePanel] = useState(false);
   const [viewingSession, setViewingSession] = useState<ChatSession | null>(null);
+  const [archiving, setArchiving] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const showSnackbar = useCallback(
@@ -593,7 +594,9 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
   };
 
   const handleArchiveChat = async () => {
-    if (messages.length === 0) return;
+    if (messages.length === 0 || archiving) return;
+    setArchiving(true);
+    await new Promise((r) => setTimeout(r, 450));
     try {
       await archiveCurrentChat(messages);
       await clearCurrentMessages();
@@ -602,6 +605,8 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
       showSnackbar("Chat archived", "success");
     } catch {
       showSnackbar("Failed to archive chat", "error");
+    } finally {
+      setArchiving(false);
     }
   };
 
@@ -627,42 +632,31 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
 
   return (
     <Box sx={{ maxWidth: 600, mx: "auto", height: "calc(100vh - 40px)", display: "flex", flexDirection: "column" }}>
-      {/* Title bar with back + history (left) and delete/archive (right) */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
-        {/* Left: back + history */}
-        <IconButton
-          onClick={onBack}
-          size="small"
-          sx={{
-            flexShrink: 0,
-            background: "rgba(255,255,255,0.5)",
-            border: "1px solid rgba(0,0,0,0.06)",
-            "&:hover": { background: "rgba(10,132,255,0.08)" },
-          }}
-        >
-          <BackIcon sx={{ fontSize: 20, color: "#0a84ff" }} />
-        </IconButton>
-        <IconButton
-          onClick={() => setShowArchivePanel(true)}
-          size="small"
-          sx={{
-            flexShrink: 0,
-            background: "rgba(255,255,255,0.5)",
-            border: "1px solid rgba(0,0,0,0.06)",
-            "&:hover": { background: "rgba(10,132,255,0.08)" },
-          }}
-        >
-          <ChatHistoryIcon sx={{ fontSize: 20, color: "#0a84ff" }} />
-        </IconButton>
+      {/* Title bar — back (left), centered title, history + delete (right) */}
+      <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+        {/* Left: back */}
+        <Box sx={{ flex: 1, display: "flex" }}>
+          <IconButton
+            onClick={onBack}
+            size="small"
+            sx={{
+              flexShrink: 0,
+              background: "rgba(255,255,255,0.5)",
+              border: "1px solid rgba(0,0,0,0.06)",
+              "&:hover": { background: "rgba(10,132,255,0.08)" },
+            }}
+          >
+            <BackIcon sx={{ fontSize: 20, color: "#0a84ff" }} />
+          </IconButton>
+        </Box>
 
         {/* Center: title */}
         <Box
           sx={{
+            flexShrink: 0,
             display: "flex",
             alignItems: "center",
             gap: 0.75,
-            flex: 1,
-            justifyContent: "center",
           }}
         >
           <RobotIcon sx={{ fontSize: 22, color: "#0a84ff" }} />
@@ -671,21 +665,40 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
           </Typography>
         </Box>
 
-        {/* Right: delete (archives) */}
-        {hasMessages && (
+        {/* Right: history + delete */}
+        <Box sx={{ flex: 1, display: "flex", justifyContent: "flex-end", gap: 0.5 }}>
           <IconButton
-            onClick={handleArchiveChat}
+            onClick={() => setShowArchivePanel(true)}
             size="small"
             sx={{
               flexShrink: 0,
-              background: "rgba(255,55,48,0.06)",
-              border: "1px solid rgba(255,55,48,0.1)",
-              "&:hover": { background: "rgba(255,55,48,0.12)" },
+              background: "rgba(255,255,255,0.5)",
+              border: "1px solid rgba(0,0,0,0.06)",
+              "&:hover": { background: "rgba(10,132,255,0.08)" },
             }}
           >
-            <DeleteIcon sx={{ fontSize: 20, color: "#ff3b30" }} />
+            <ArchiveIcon sx={{ fontSize: 20, color: "#0a84ff" }} />
           </IconButton>
-        )}
+          {hasMessages && (
+            <IconButton
+              onClick={handleArchiveChat}
+              disabled={archiving}
+              size="small"
+              sx={{
+                flexShrink: 0,
+                background: "rgba(255,55,48,0.06)",
+                border: "1px solid rgba(255,55,48,0.1)",
+                "&:hover": { background: "rgba(255,55,48,0.12)" },
+              }}
+            >
+              {archiving ? (
+                <CircularProgress size={18} sx={{ color: "#ff3b30" }} />
+              ) : (
+                <DeleteIcon sx={{ fontSize: 20, color: "#ff3b30" }} />
+              )}
+            </IconButton>
+          )}
+        </Box>
       </Box>
 
       {/* Archived chats modal */}
@@ -700,7 +713,7 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
       >
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <ChatHistoryIcon sx={{ color: "#0a84ff" }} />
+            <ArchiveIcon sx={{ color: "#0a84ff" }} />
             Archived Chats ({archivedSessions.length})
           </Box>
           <IconButton
@@ -921,12 +934,13 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
         {messages.map((msg, index) => (
           <Box
             key={index}
-            className="lg-anim-fade-up"
+            className={archiving ? "finly-archive-out" : "lg-anim-fade-up"}
             sx={{
               display: "flex",
               flexDirection: msg.role === "user" ? "row-reverse" : "row",
               gap: 1,
               alignItems: "flex-start",
+              ...(archiving && { animationDelay: `${index * 0.04}s` }),
             }}
           >
             {/* Avatar */}
@@ -961,12 +975,12 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
                 borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
                 background:
                   msg.role === "user"
-                    ? "linear-gradient(135deg, #0a84ff, #0066d6)"
+                    ? "linear-gradient(135deg, #d6ebff, #c2dcff)"
                     : "rgba(255,255,255,0.6)",
                 border:
                   msg.role === "assistant"
                     ? "1px solid rgba(255,255,255,0.6)"
-                    : "none",
+                    : "1px solid rgba(10,132,255,0.15)",
                 boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
               }}
             >
@@ -974,7 +988,7 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
                 sx={{
                   fontSize: "0.9rem",
                   lineHeight: 1.5,
-                  color: msg.role === "user" ? "white" : "#1c1c1e",
+                  color: "#1c1c1e",
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
                 }}
@@ -1057,13 +1071,12 @@ export default function AIChatView({ onBack }: AIChatViewProps) {
                 boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                 display: "flex",
                 alignItems: "center",
-                gap: 1,
+                gap: 0.5,
               }}
             >
-              <CircularProgress size={16} sx={{ color: "#0a84ff" }} />
-              <Typography sx={{ fontSize: "0.85rem", color: "#1c1c1e" }}>
-                Thinking...
-              </Typography>
+              <span className="finly-typing-dot" />
+              <span className="finly-typing-dot" />
+              <span className="finly-typing-dot" />
             </Box>
           </Box>
         )}
